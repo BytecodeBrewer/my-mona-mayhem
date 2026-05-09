@@ -6,6 +6,12 @@
 	<head>
 		<meta charset="utf-8" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
+			rel="stylesheet"
+		/>
 		<meta name="viewport" content="width=device-width" />
 		<meta name="generator" content={Astro.generator} />
 		<title>Mona Mayhem - GitHub Contribution Battle Arena</title>
@@ -259,20 +265,75 @@
 
 		<style>
 			:root {
-				color: #f7f7fb;
-				background: #111827;
-				font-family:
-					Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+				--arcade-bg: #0a0a1a;
+				--arcade-panel: rgb(14 16 42 / 88%);
+				--arcade-panel-strong: rgb(18 20 54 / 96%);
+				--arcade-green: #5fed83;
+				--arcade-purple: #8a2be2;
+				--arcade-error: #ff3366;
+				--arcade-text: #f7f7ff;
+				--arcade-muted: #b8b8d9;
+				--arcade-border: rgb(95 237 131 / 42%);
+				--arcade-purple-border: rgb(138 43 226 / 48%);
+				--arcade-green-glow: 0 0 14px rgb(95 237 131 / 70%);
+				--arcade-purple-glow: 0 0 18px rgb(138 43 226 / 72%);
+				color: var(--arcade-text);
+				background: var(--arcade-bg);
+				font-family: "Press Start 2P", ui-monospace, SFMono-Regular, Consolas, monospace;
 			}
 
 			* {
 				box-sizing: border-box;
 			}
 
+			html {
+				background: var(--arcade-bg);
+			}
+
 			body {
+				position: relative;
 				margin: 0;
 				min-height: 100vh;
-				background: #111827;
+				overflow-x: hidden;
+				background:
+					radial-gradient(circle at 50% 0%, rgb(138 43 226 / 18%), transparent 38rem),
+					linear-gradient(180deg, #101032 0%, var(--arcade-bg) 58%);
+			}
+
+			body::before,
+			body::after {
+				position: fixed;
+				inset: 0;
+				z-index: 20;
+				pointer-events: none;
+				content: "";
+			}
+
+			body::before {
+				opacity: 0.08;
+				background:
+					repeating-linear-gradient(
+						0deg,
+						rgb(255 255 255 / 32%) 0,
+						rgb(255 255 255 / 32%) 1px,
+						transparent 1px,
+						transparent 4px
+					),
+					repeating-linear-gradient(
+						90deg,
+						rgb(95 237 131 / 16%) 0,
+						rgb(95 237 131 / 16%) 1px,
+						transparent 1px,
+						transparent 8px
+					);
+				animation: scanline-drift 8s linear infinite;
+			}
+
+			body::after {
+				opacity: 0.85;
+				background:
+					radial-gradient(circle at center, transparent 42%, rgb(0 0 0 / 34%) 100%),
+					linear-gradient(90deg, rgb(138 43 226 / 10%), transparent 22%, transparent 78%, rgb(95 237 131 / 8%));
 			}
 
 			button,
@@ -284,100 +345,164 @@
 				width: min(960px, calc(100% - 32px));
 				margin: 0 auto;
 				padding: 56px 0;
+				position: relative;
+				z-index: 1;
 			}
 
 			.hero {
-				margin-bottom: 32px;
+				margin-bottom: 36px;
 				text-align: center;
 			}
 
 			.hero h1 {
 				margin: 0;
-				font-size: clamp(2.25rem, 7vw, 4rem);
-				line-height: 1;
+				color: var(--arcade-green);
+				font-size: clamp(1.8rem, 6vw, 3.6rem);
+				line-height: 1.18;
+				text-shadow:
+					0 0 4px rgb(95 237 131 / 90%),
+					0 0 16px rgb(95 237 131 / 75%),
+					0 0 30px rgb(138 43 226 / 70%);
+				animation: neon-pulse 3s ease-in-out infinite;
 			}
 
 			.hero p {
-				margin: 12px 0 0;
-				color: #c7d2fe;
-				font-size: 1.1rem;
+				margin: 18px 0 0;
+				color: var(--arcade-muted);
+				font-size: clamp(0.64rem, 2vw, 0.9rem);
+				line-height: 1.8;
+				text-shadow: 0 0 10px rgb(138 43 226 / 70%);
 			}
 
 			.battle-panel {
-				padding: 24px;
-				border: 1px solid #374151;
+				padding: 26px;
+				border: 1px solid var(--arcade-border);
 				border-radius: 8px;
-				background: #1f2937;
+				background: var(--arcade-panel);
+				box-shadow:
+					0 0 0 1px rgb(138 43 226 / 18%),
+					0 0 24px rgb(95 237 131 / 14%),
+					inset 0 0 28px rgb(138 43 226 / 10%);
 			}
 
 			.battle-panel h2 {
 				margin: 0 0 20px;
-				font-size: 1.25rem;
+				color: var(--arcade-purple);
+				font-size: clamp(0.8rem, 2vw, 1rem);
+				line-height: 1.6;
+				text-shadow: var(--arcade-purple-glow);
 			}
 
 			.player-grid {
 				display: grid;
 				grid-template-columns: repeat(2, minmax(0, 1fr));
-				gap: 16px;
+				gap: 18px;
 			}
 
 			.player-field {
 				display: grid;
 				gap: 8px;
+				opacity: 0;
+				transform: translateY(18px);
+				animation: float-in 700ms ease-out forwards;
+			}
+
+			.player-field:nth-child(2) {
+				animation-delay: 120ms;
 			}
 
 			.player-field span {
-				color: #d1d5db;
+				color: var(--arcade-green);
+				font-size: 0.68rem;
 				font-weight: 700;
+				text-shadow: 0 0 8px rgb(95 237 131 / 70%);
 			}
 
 			.player-field input {
 				width: 100%;
-				padding: 12px 14px;
-				border: 1px solid #4b5563;
+				padding: 14px;
+				border: 1px solid var(--arcade-purple-border);
 				border-radius: 6px;
-				color: #f9fafb;
-				background: #111827;
+				color: var(--arcade-text);
+				background: rgb(2 4 20 / 84%);
+				box-shadow: inset 0 0 16px rgb(138 43 226 / 18%);
+				font-size: 0.72rem;
+				line-height: 1.5;
 			}
 
-			.player-field input:focus {
-				border-color: #22c55e;
-				outline: 3px solid rgb(34 197 94 / 25%);
+			.player-field input::placeholder {
+				color: rgb(184 184 217 / 58%);
+			}
+
+			.player-field input:focus,
+			.player-field input:focus-visible {
+				border-color: var(--arcade-green);
+				outline: 2px solid rgb(95 237 131 / 38%);
+				box-shadow:
+					inset 0 0 16px rgb(95 237 131 / 14%),
+					0 0 18px rgb(95 237 131 / 45%);
 			}
 
 			.battle-button {
 				width: 100%;
-				margin-top: 20px;
-				padding: 12px 18px;
-				border: 0;
+				margin-top: 22px;
+				padding: 16px 18px;
+				border: 1px solid rgb(95 237 131 / 78%);
 				border-radius: 6px;
-				color: #04130a;
-				background: #22c55e;
+				color: #070711;
+				background: linear-gradient(135deg, var(--arcade-green), var(--arcade-purple), var(--arcade-green));
+				background-size: 220% 220%;
+				box-shadow:
+					0 0 16px rgb(95 237 131 / 44%),
+					0 0 26px rgb(138 43 226 / 28%);
+				font-size: 0.8rem;
 				font-weight: 800;
 				cursor: pointer;
+				transition:
+					transform 180ms ease,
+					box-shadow 180ms ease,
+					filter 180ms ease;
 			}
 
 			.battle-button:hover {
-				background: #4ade80;
+				filter: brightness(1.12);
+				transform: translateY(-2px);
+				box-shadow:
+					0 0 22px rgb(95 237 131 / 70%),
+					0 0 34px rgb(138 43 226 / 56%);
+			}
+
+			.battle-button:focus-visible {
+				outline: 3px solid rgb(95 237 131 / 44%);
+				outline-offset: 4px;
 			}
 
 			.battle-button:disabled {
 				cursor: wait;
-				opacity: 0.7;
+				filter: saturate(0.75);
+				animation: button-disabled-pulse 900ms ease-in-out infinite alternate;
 			}
 
 			.status-message {
 				min-height: 24px;
-				margin: 16px 0 0;
-				color: #d1d5db;
+				margin: 18px 0 0;
+				color: var(--arcade-muted);
+				font-size: 0.7rem;
+				line-height: 1.8;
 			}
 
 			.status-message[data-type="error"] {
-				color: #fca5a5;
+				color: var(--arcade-error);
+				text-shadow: 0 0 10px rgb(255 51 102 / 72%);
 			}
 
 			.status-message[data-type="success"] {
-				color: #86efac;
+				color: var(--arcade-green);
+				text-shadow: var(--arcade-green-glow);
+			}
+
+			.status-message[data-type="loading"] {
+				animation: loading-shift 1.15s linear infinite alternate;
 			}
 
 			.results {
@@ -389,31 +514,62 @@
 			}
 
 			:global(.result-card) {
+				position: relative;
 				min-width: 0;
-				padding: 20px;
-				border: 1px solid #374151;
+				overflow: hidden;
+				padding: 22px;
+				border: 1px solid var(--arcade-purple-border);
 				border-radius: 8px;
-				background: #172033;
+				background:
+					linear-gradient(180deg, rgb(95 237 131 / 5%), transparent 42%),
+					var(--arcade-panel-strong);
+				box-shadow:
+					0 0 20px rgb(138 43 226 / 20%),
+					inset 0 0 22px rgb(95 237 131 / 8%);
+			}
+
+			:global(.result-card::after) {
+				position: absolute;
+				inset: -45% auto -45% -75%;
+				width: 50%;
+				content: "";
+				background: linear-gradient(
+					110deg,
+					transparent,
+					rgb(255 255 255 / 12%),
+					rgb(95 237 131 / 12%),
+					transparent
+				);
+				transform: skewX(-18deg);
+				animation: card-shimmer 4.5s ease-in-out infinite;
+				pointer-events: none;
 			}
 
 			:global(.player-label),
 			:global(.result-meta),
 			:global(.result-range) {
 				margin: 0;
-				color: #9ca3af;
+				color: var(--arcade-muted);
+				font-size: 0.62rem;
+				line-height: 1.8;
 			}
 
 			:global(.result-card h3) {
-				margin: 8px 0 16px;
+				margin: 12px 0 18px;
+				color: var(--arcade-text);
 				overflow-wrap: anywhere;
-				font-size: 1.5rem;
+				font-size: clamp(0.9rem, 2vw, 1.2rem);
+				line-height: 1.45;
+				text-shadow: 0 0 12px rgb(95 237 131 / 52%);
 			}
 
 			:global(.contribution-total) {
 				margin: 0;
-				color: #86efac;
-				font-size: 2rem;
+				color: var(--arcade-green);
+				font-size: clamp(1.35rem, 4vw, 2rem);
 				font-weight: 800;
+				line-height: 1.5;
+				text-shadow: var(--arcade-green-glow);
 			}
 
 			:global(.result-range) {
@@ -429,7 +585,10 @@
 				margin-top: 18px;
 				overflow-x: auto;
 				overscroll-behavior-inline: contain;
-				padding-bottom: 4px;
+				padding: 8px;
+				border: 1px solid rgb(95 237 131 / 14%);
+				border-radius: 6px;
+				background: rgb(0 0 0 / 20%);
 			}
 
 			:global(.contribution-week) {
@@ -444,24 +603,45 @@
 				height: 12px;
 				border-radius: 2px;
 				box-shadow: inset 0 0 0 1px rgb(255 255 255 / 8%);
+				transition:
+					transform 140ms ease,
+					box-shadow 140ms ease,
+					outline-color 140ms ease;
+			}
+
+			:global(.contribution-day:hover) {
+				position: relative;
+				z-index: 2;
+				outline: 1px solid var(--arcade-green);
+				transform: scale(1.3);
+				box-shadow:
+					0 0 10px rgb(95 237 131 / 86%),
+					0 0 18px rgb(138 43 226 / 55%);
 			}
 
 			:global(.graph-empty) {
 				margin: 0;
-				color: #9ca3af;
+				color: var(--arcade-muted);
 			}
 
 			:global(.versus) {
 				display: grid;
 				place-items: center;
-				min-width: 56px;
+				min-width: 64px;
 				align-self: center;
-				padding: 10px 12px;
-				border: 1px solid #374151;
+				padding: 14px 12px;
+				border: 1px solid rgb(95 237 131 / 66%);
 				border-radius: 999px;
-				background: #1f2937;
-				color: #c7d2fe;
+				color: var(--arcade-text);
+				background: linear-gradient(135deg, var(--arcade-green), var(--arcade-purple), var(--arcade-green));
+				background-size: 260% 260%;
+				box-shadow:
+					0 0 18px rgb(95 237 131 / 60%),
+					0 0 24px rgb(138 43 226 / 55%);
+				font-size: 0.72rem;
 				font-weight: 900;
+				text-shadow: 0 0 8px rgb(0 0 0 / 90%);
+				animation: vs-gradient 2.4s linear infinite;
 			}
 
 			@media (max-width: 720px) {
@@ -476,6 +656,99 @@
 
 				:global(.versus) {
 					min-height: 40px;
+				}
+			}
+
+			@keyframes neon-pulse {
+				0%,
+				100% {
+					text-shadow:
+						0 0 4px rgb(95 237 131 / 90%),
+						0 0 16px rgb(95 237 131 / 75%),
+						0 0 30px rgb(138 43 226 / 70%);
+				}
+
+				50% {
+					text-shadow:
+						0 0 2px rgb(95 237 131 / 70%),
+						0 0 10px rgb(95 237 131 / 58%),
+						0 0 22px rgb(138 43 226 / 58%);
+				}
+			}
+
+			@keyframes scanline-drift {
+				from {
+					background-position: 0 0, 0 0;
+				}
+
+				to {
+					background-position: 0 16px, 16px 0;
+				}
+			}
+
+			@keyframes float-in {
+				to {
+					opacity: 1;
+					transform: translateY(0);
+				}
+			}
+
+			@keyframes loading-shift {
+				from {
+					color: var(--arcade-green);
+					text-shadow: var(--arcade-green-glow);
+				}
+
+				to {
+					color: var(--arcade-purple);
+					text-shadow: var(--arcade-purple-glow);
+				}
+			}
+
+			@keyframes button-disabled-pulse {
+				from {
+					opacity: 0.58;
+				}
+
+				to {
+					opacity: 0.86;
+				}
+			}
+
+			@keyframes card-shimmer {
+				0%,
+				42% {
+					left: -75%;
+				}
+
+				72%,
+				100% {
+					left: 135%;
+				}
+			}
+
+			@keyframes vs-gradient {
+				from {
+					background-position: 0% 50%;
+				}
+
+				to {
+					background-position: 200% 50%;
+				}
+			}
+
+			@media (prefers-reduced-motion: reduce) {
+				*,
+				*::before,
+				*::after {
+					scroll-behavior: auto !important;
+					animation-duration: 1ms !important;
+					animation-iteration-count: 1 !important;
+					transition-duration: 1ms !important;
+				}
+
+				:global(.contribution-day:hover) {
+					transform: none;
 				}
 			}
 		</style>
