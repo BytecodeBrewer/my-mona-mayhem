@@ -44,15 +44,34 @@
 		<script>
 			type StatusType = 'info' | 'loading' | 'success' | 'error';
 
-			type ContributionData = {
+			interface ContributionDay {
+				weekday: number;
+				count: number;
+				level: number;
+			}
+
+			interface ContributionWeek {
+				index: number;
+				first_day: string;
+				contribution_days: ContributionDay[];
+			}
+
+			interface ContributionData {
+				schema?: string;
+				generated_at?: string;
 				from?: string;
 				to?: string;
+				range_days?: number;
 				total_contributions?: number;
-			};
+				colors_full?: string[];
+				weeks?: ContributionWeek[];
+			}
 
-			type ErrorResponse = {
+			interface ErrorResponse {
 				error?: string;
-			};
+			}
+
+			const FALLBACK_COLORS = ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'];
 
 			const playerOneInput = document.querySelector('#player-one');
 			const playerTwoInput = document.querySelector('#player-two');
@@ -83,6 +102,58 @@
 				return `${player.from} to ${player.to}`;
 			};
 
+			const formatContributionDate = (week: ContributionWeek, day: ContributionDay): string => {
+				const date = new Date(`${week.first_day}T00:00:00Z`);
+
+				if (Number.isNaN(date.getTime())) {
+					return 'Unknown date';
+				}
+
+				date.setUTCDate(date.getUTCDate() + day.weekday);
+
+				return date.toISOString().slice(0, 10);
+			};
+
+			const renderContributionGraph = (data: ContributionData): HTMLElement => {
+				const graph = document.createElement('div');
+				const colors = data.colors_full?.length ? data.colors_full : FALLBACK_COLORS;
+
+				graph.className = 'contribution-graph';
+				graph.setAttribute('aria-label', 'Contribution graph');
+
+				for (const weekData of data.weeks ?? []) {
+					const week = document.createElement('div');
+
+					week.className = 'contribution-week';
+
+					for (const dayData of weekData.contribution_days ?? []) {
+						const day = document.createElement('span');
+						const color = colors[dayData.level] ?? colors[0] ?? FALLBACK_COLORS[0];
+						const date = formatContributionDate(weekData, dayData);
+						const contributionLabel = dayData.count === 1 ? 'contribution' : 'contributions';
+
+						day.className = 'contribution-day';
+						day.style.backgroundColor = color;
+						day.title = `${date}: ${dayData.count} ${contributionLabel}`;
+						day.setAttribute('aria-label', day.title);
+
+						week.append(day);
+					}
+
+					graph.append(week);
+				}
+
+				if (!graph.hasChildNodes()) {
+					const empty = document.createElement('p');
+
+					empty.className = 'graph-empty';
+					empty.textContent = 'Contribution graph unavailable.';
+					graph.append(empty);
+				}
+
+				return graph;
+			};
+
 			const renderPlayerCard = (
 				label: string,
 				username: string,
@@ -109,7 +180,14 @@
 				resultMeta.textContent = 'Total contributions';
 				resultRange.textContent = dateRange;
 
-				card.append(playerLabel, heading, contributionTotal, resultMeta, resultRange);
+				card.append(
+					playerLabel,
+					heading,
+					contributionTotal,
+					resultMeta,
+					resultRange,
+					renderContributionGraph(data)
+				);
 
 				return card;
 			};
@@ -304,47 +382,84 @@
 
 			.results {
 				display: grid;
-				grid-template-columns: 1fr auto 1fr;
+				grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 				align-items: stretch;
 				gap: 16px;
 				margin-top: 24px;
 			}
 
-			.result-card {
+			:global(.result-card) {
+				min-width: 0;
 				padding: 20px;
 				border: 1px solid #374151;
 				border-radius: 8px;
 				background: #172033;
 			}
 
-			.player-label,
-			.result-meta,
-			.result-range {
+			:global(.player-label),
+			:global(.result-meta),
+			:global(.result-range) {
 				margin: 0;
 				color: #9ca3af;
 			}
 
-			.result-card h3 {
+			:global(.result-card h3) {
 				margin: 8px 0 16px;
 				overflow-wrap: anywhere;
 				font-size: 1.5rem;
 			}
 
-			.contribution-total {
+			:global(.contribution-total) {
 				margin: 0;
 				color: #86efac;
 				font-size: 2rem;
 				font-weight: 800;
 			}
 
-			.result-range {
+			:global(.result-range) {
 				margin-top: 12px;
 			}
 
-			.versus {
+			:global(.contribution-graph) {
+				display: grid;
+				grid-auto-rows: max-content;
+				gap: 4px;
+				width: 100%;
+				max-width: 100%;
+				margin-top: 18px;
+				overflow-x: auto;
+				overscroll-behavior-inline: contain;
+				padding-bottom: 4px;
+			}
+
+			:global(.contribution-week) {
+				display: grid;
+				grid-template-columns: repeat(7, 12px);
+				gap: 4px;
+			}
+
+			:global(.contribution-day) {
+				display: block;
+				width: 12px;
+				height: 12px;
+				border-radius: 2px;
+				box-shadow: inset 0 0 0 1px rgb(255 255 255 / 8%);
+			}
+
+			:global(.graph-empty) {
+				margin: 0;
+				color: #9ca3af;
+			}
+
+			:global(.versus) {
 				display: grid;
 				place-items: center;
 				min-width: 56px;
+				align-self: center;
+				padding: 10px 12px;
+				border: 1px solid #374151;
+				border-radius: 999px;
+				background: #1f2937;
 				color: #c7d2fe;
 				font-weight: 900;
 			}
@@ -359,7 +474,7 @@
 					grid-template-columns: 1fr;
 				}
 
-				.versus {
+				:global(.versus) {
 					min-height: 40px;
 				}
 			}
