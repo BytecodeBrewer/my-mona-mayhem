@@ -6,33 +6,57 @@
 	<head>
 		<meta charset="utf-8" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
+			rel="stylesheet"
+		/>
 		<meta name="viewport" content="width=device-width" />
 		<meta name="generator" content={Astro.generator} />
-		<title>Mona Mayhem - GitHub Contribution Battle Arena</title>
+		<title>Contribution Arena - GitHub Contribution Battle</title>
 	</head>
 	<body>
 		<main class="page-shell">
 			<header class="hero">
-				<h1>Mona Mayhem</h1>
-				<p>GitHub Contribution Battle Arena</p>
+				<h1>Contribution Arena</h1>
+				<p>GitHub Contribution Battle</p>
 			</header>
 
 			<section class="battle-panel" aria-labelledby="battle-title">
 				<h2 id="battle-title">Choose Your Players</h2>
 
-				<div class="player-grid">
-					<label class="player-field" for="player-one">
-						<span>Player 1</span>
-						<input id="player-one" name="player-one" type="text" autocomplete="off" placeholder="octocat" />
-					</label>
+				<form id="battle-form" class="battle-form">
+					<div class="player-grid">
+						<label class="player-field" for="player-one">
+							<span>Player 1</span>
+							<input
+								id="player-one"
+								name="player-one"
+								type="text"
+								autocomplete="off"
+								placeholder="octocat"
+								aria-describedby="player-one-error"
+							/>
+							<p id="player-one-error" class="field-error" aria-live="polite"></p>
+						</label>
 
-					<label class="player-field" for="player-two">
-						<span>Player 2</span>
-						<input id="player-two" name="player-two" type="text" autocomplete="off" placeholder="torvalds" />
-					</label>
-				</div>
+						<label class="player-field" for="player-two">
+							<span>Player 2</span>
+							<input
+								id="player-two"
+								name="player-two"
+								type="text"
+								autocomplete="off"
+								placeholder="torvalds"
+								aria-describedby="player-two-error"
+							/>
+							<p id="player-two-error" class="field-error" aria-live="polite"></p>
+						</label>
+					</div>
 
-				<button id="battle-button" class="battle-button" type="button">Battle</button>
+					<button id="battle-button" class="battle-button" type="submit">Battle</button>
+				</form>
 				<p id="status-message" class="status-message" aria-live="polite">
 					Enter two GitHub usernames to start a battle.
 				</p>
@@ -44,25 +68,57 @@
 		<script>
 			type StatusType = 'info' | 'loading' | 'success' | 'error';
 
-			type ContributionData = {
+			interface ContributionDay {
+				weekday: number;
+				count: number;
+				level: number;
+			}
+
+			interface ContributionWeek {
+				index: number;
+				first_day: string;
+				contribution_days: ContributionDay[];
+			}
+
+			interface ContributionData {
+				schema?: string;
+				generated_at?: string;
 				from?: string;
 				to?: string;
+				range_days?: number;
 				total_contributions?: number;
-			};
+				colors_full?: string[];
+				weeks?: ContributionWeek[];
+			}
 
-			type ErrorResponse = {
+			interface ErrorResponse {
 				error?: string;
-			};
+			}
 
+			const FALLBACK_COLORS = ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'];
+			const API_UNREACHABLE_MESSAGE =
+				'Could not reach the contribution API. Open the app from the Astro network URL and make sure your device is on the same Wi-Fi.';
+			const USERNAME_PATTERN = /^(?!-)(?!.*--)[a-zA-Z0-9-]{1,39}(?<!-)$/;
+			const USERNAME_RULES =
+				'Use 1-39 letters, numbers, or single hyphens. No leading or trailing hyphens.';
+
+			const battlePanel = document.querySelector('.battle-panel');
+			const battleForm = document.querySelector('#battle-form');
 			const playerOneInput = document.querySelector('#player-one');
 			const playerTwoInput = document.querySelector('#player-two');
+			const playerOneError = document.querySelector('#player-one-error');
+			const playerTwoError = document.querySelector('#player-two-error');
 			const battleButton = document.querySelector('#battle-button');
 			const statusMessage = document.querySelector('#status-message');
 			const results = document.querySelector('#results');
 
 			if (
+				!(battlePanel instanceof HTMLElement) ||
+				!(battleForm instanceof HTMLFormElement) ||
 				!(playerOneInput instanceof HTMLInputElement) ||
 				!(playerTwoInput instanceof HTMLInputElement) ||
+				!(playerOneError instanceof HTMLElement) ||
+				!(playerTwoError instanceof HTMLElement) ||
 				!(battleButton instanceof HTMLButtonElement) ||
 				!(statusMessage instanceof HTMLElement) ||
 				!(results instanceof HTMLElement)
@@ -75,12 +131,133 @@
 				statusMessage.dataset.type = type;
 			};
 
+			const replayShake = (...elements: HTMLElement[]): void => {
+				for (const element of elements) {
+					element.classList.remove('is-shaking');
+					void element.offsetWidth;
+					element.classList.add('is-shaking');
+					window.setTimeout(() => element.classList.remove('is-shaking'), 430);
+				}
+			};
+
+			const setFieldError = (
+				input: HTMLInputElement,
+				errorElement: HTMLElement,
+				message = ''
+			): void => {
+				const field = input.closest('.player-field');
+
+				input.setAttribute('aria-invalid', message ? 'true' : 'false');
+				errorElement.textContent = message;
+
+				if (field instanceof HTMLElement) {
+					field.dataset.invalid = message ? 'true' : 'false';
+				}
+			};
+
+			const validateUsername = (username: string, label: string): string => {
+				if (!username) {
+					return `${label} username is required.`;
+				}
+
+				if (!USERNAME_PATTERN.test(username)) {
+					return `${label}: ${USERNAME_RULES}`;
+				}
+
+				return '';
+			};
+
+			const validatePlayers = (): boolean => {
+				const playerOne = playerOneInput.value.trim();
+				const playerTwo = playerTwoInput.value.trim();
+				const playerOneMessage = validateUsername(playerOne, 'Player 1');
+				const playerTwoMessage = validateUsername(playerTwo, 'Player 2');
+				const invalidFields: HTMLElement[] = [];
+
+				setFieldError(playerOneInput, playerOneError, playerOneMessage);
+				setFieldError(playerTwoInput, playerTwoError, playerTwoMessage);
+
+				for (const input of [playerOneInput, playerTwoInput]) {
+					const field = input.closest('.player-field');
+
+					if (field instanceof HTMLElement && input.getAttribute('aria-invalid') === 'true') {
+						invalidFields.push(field);
+					}
+				}
+
+				if (invalidFields.length === 0) {
+					return true;
+				}
+
+				setStatus(
+					invalidFields.length === 2
+						? 'Check both highlighted username fields.'
+						: 'Check the highlighted username field.',
+					'error'
+				);
+				replayShake(battlePanel, statusMessage, ...invalidFields);
+
+				return false;
+			};
+
 			const formatDateRange = (player: ContributionData): string => {
 				if (!player.from || !player.to) {
 					return 'Date range unavailable';
 				}
 
 				return `${player.from} to ${player.to}`;
+			};
+
+			const formatContributionDate = (week: ContributionWeek, day: ContributionDay): string => {
+				const date = new Date(`${week.first_day}T00:00:00Z`);
+
+				if (Number.isNaN(date.getTime())) {
+					return 'Unknown date';
+				}
+
+				date.setUTCDate(date.getUTCDate() + day.weekday);
+
+				return date.toISOString().slice(0, 10);
+			};
+
+			const renderContributionGraph = (data: ContributionData): HTMLElement => {
+				const graph = document.createElement('div');
+				const colors = data.colors_full?.length ? data.colors_full : FALLBACK_COLORS;
+
+				graph.className = 'contribution-graph';
+				graph.setAttribute('aria-label', 'Contribution graph');
+
+				for (const weekData of data.weeks ?? []) {
+					const week = document.createElement('div');
+
+					week.className = 'contribution-week';
+
+					for (const dayData of weekData.contribution_days ?? []) {
+						const day = document.createElement('span');
+						const color = colors[dayData.level] ?? colors[0] ?? FALLBACK_COLORS[0];
+						const date = formatContributionDate(weekData, dayData);
+						const contributionLabel = dayData.count === 1 ? 'contribution' : 'contributions';
+
+						day.className = 'contribution-day';
+						day.style.backgroundColor = color;
+						day.title = `${date}: ${dayData.count} ${contributionLabel}`;
+						day.setAttribute('aria-label', day.title);
+
+						week.append(day);
+					}
+
+					graph.append(week);
+				}
+
+				if (!graph.hasChildNodes()) {
+					const empty = document.createElement('p');
+
+					empty.className = 'graph-empty';
+					empty.textContent = 'Contribution graph unavailable.';
+					graph.append(empty);
+				}
+
+				return graph;
 			};
 
 			const renderPlayerCard = (
@@ -109,14 +286,38 @@
 				resultMeta.textContent = 'Total contributions';
 				resultRange.textContent = dateRange;
 
-				card.append(playerLabel, heading, contributionTotal, resultMeta, resultRange);
+				card.append(
+					playerLabel,
+					heading,
+					contributionTotal,
+					resultMeta,
+					resultRange,
+					renderContributionGraph(data)
+				);
 
 				return card;
 			};
 
 			const fetchContributions = async (username: string): Promise<ContributionData> => {
-				const response = await fetch(`/api/contributions/${encodeURIComponent(username)}`);
-				const data = await response.json();
+				let response: Response;
+
+				try {
+					response = await fetch(`/api/contributions/${encodeURIComponent(username)}`);
+				} catch (_error) {
+					throw new Error(API_UNREACHABLE_MESSAGE);
+				}
+
+				let data: unknown;
+
+				try {
+					data = await response.json();
+				} catch (_error) {
+					if (!response.ok) {
+						throw new Error('The contribution API returned an unreadable error response.');
+					}
+
+					throw new Error('The contribution API returned an unreadable response.');
+				}
 
 				if (!response.ok) {
 					const errorData = data as ErrorResponse;
@@ -137,8 +338,7 @@
 
 				results.replaceChildren();
 
-				if (!playerOne || !playerTwo) {
-					setStatus('Please enter both GitHub usernames before battling.', 'error');
+				if (!validatePlayers()) {
 					return;
 				}
 
@@ -163,17 +363,24 @@
 				} catch (error) {
 					const message = error instanceof Error ? error.message : 'Could not fetch contribution data';
 					setStatus(message, 'error');
+					replayShake(battlePanel, statusMessage);
 				} finally {
 					battleButton.disabled = false;
 				}
 			};
 
-			battleButton.addEventListener('click', runBattle);
+			battleForm.addEventListener('submit', (event) => {
+				event.preventDefault();
+				runBattle();
+			});
 
 			[playerOneInput, playerTwoInput].forEach((input) => {
-				input.addEventListener('keydown', (event) => {
-					if (event.key === 'Enter') {
-						runBattle();
+				input.addEventListener('input', () => {
+					const errorElement = input === playerOneInput ? playerOneError : playerTwoError;
+
+					if (input.getAttribute('aria-invalid') === 'true') {
+						setFieldError(input, errorElement);
+						setStatus('Enter two GitHub usernames to start a battle.', 'info');
 					}
 				});
 			});
@@ -181,20 +388,75 @@
 
 		<style>
 			:root {
-				color: #f7f7fb;
-				background: #111827;
-				font-family:
-					Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+				--arcade-bg: #0a0a1a;
+				--arcade-panel: rgb(14 16 42 / 88%);
+				--arcade-panel-strong: rgb(18 20 54 / 96%);
+				--arcade-green: #5fed83;
+				--arcade-purple: #8a2be2;
+				--arcade-error: #ff3366;
+				--arcade-text: #f7f7ff;
+				--arcade-muted: #b8b8d9;
+				--arcade-border: rgb(95 237 131 / 42%);
+				--arcade-purple-border: rgb(138 43 226 / 48%);
+				--arcade-green-glow: 0 0 14px rgb(95 237 131 / 70%);
+				--arcade-purple-glow: 0 0 18px rgb(138 43 226 / 72%);
+				color: var(--arcade-text);
+				background: var(--arcade-bg);
+				font-family: "Press Start 2P", ui-monospace, SFMono-Regular, Consolas, monospace;
 			}
 
 			* {
 				box-sizing: border-box;
 			}
 
+			html {
+				background: var(--arcade-bg);
+			}
+
 			body {
+				position: relative;
 				margin: 0;
 				min-height: 100vh;
-				background: #111827;
+				overflow-x: hidden;
+				background:
+					radial-gradient(circle at 50% 0%, rgb(138 43 226 / 18%), transparent 38rem),
+					linear-gradient(180deg, #101032 0%, var(--arcade-bg) 58%);
+			}
+
+			body::before,
+			body::after {
+				position: fixed;
+				inset: 0;
+				z-index: 20;
+				pointer-events: none;
+				content: "";
+			}
+
+			body::before {
+				opacity: 0.08;
+				background:
+					repeating-linear-gradient(
+						0deg,
+						rgb(255 255 255 / 32%) 0,
+						rgb(255 255 255 / 32%) 1px,
+						transparent 1px,
+						transparent 4px
+					),
+					repeating-linear-gradient(
+						90deg,
+						rgb(95 237 131 / 16%) 0,
+						rgb(95 237 131 / 16%) 1px,
+						transparent 1px,
+						transparent 8px
+					);
+				animation: scanline-drift 8s linear infinite;
+			}
+
+			body::after {
+				opacity: 0.85;
+				background:
+					radial-gradient(circle at center, transparent 42%, rgb(0 0 0 / 34%) 100%),
+					linear-gradient(90deg, rgb(138 43 226 / 10%), transparent 22%, transparent 78%, rgb(95 237 131 / 8%));
 			}
 
 			button,
@@ -202,165 +464,590 @@
 				font: inherit;
 			}
 
+			:focus-visible {
+				outline: 3px solid rgb(95 237 131 / 72%);
+				outline-offset: 4px;
+			}
+
 			.page-shell {
 				width: min(960px, calc(100% - 32px));
 				margin: 0 auto;
 				padding: 56px 0;
+				position: relative;
+				z-index: 1;
 			}
 
 			.hero {
-				margin-bottom: 32px;
+				margin-bottom: 36px;
 				text-align: center;
 			}
 
 			.hero h1 {
 				margin: 0;
-				font-size: clamp(2.25rem, 7vw, 4rem);
-				line-height: 1;
+				color: var(--arcade-green);
+				font-size: clamp(1.8rem, 6vw, 3.6rem);
+				line-height: 1.18;
+				text-shadow:
+					0 0 4px rgb(95 237 131 / 90%),
+					0 0 16px rgb(95 237 131 / 75%),
+					0 0 30px rgb(138 43 226 / 70%);
+				animation: neon-pulse 3s ease-in-out infinite;
 			}
 
 			.hero p {
-				margin: 12px 0 0;
-				color: #c7d2fe;
-				font-size: 1.1rem;
+				margin: 18px 0 0;
+				color: var(--arcade-muted);
+				font-size: clamp(0.64rem, 2vw, 0.9rem);
+				line-height: 1.8;
+				text-shadow: 0 0 10px rgb(138 43 226 / 70%);
 			}
 
 			.battle-panel {
-				padding: 24px;
-				border: 1px solid #374151;
+				padding: 26px;
+				border: 1px solid var(--arcade-border);
 				border-radius: 8px;
-				background: #1f2937;
+				background: var(--arcade-panel);
+				box-shadow:
+					0 0 0 1px rgb(138 43 226 / 18%),
+					0 0 24px rgb(95 237 131 / 14%),
+					inset 0 0 28px rgb(138 43 226 / 10%);
+			}
+
+			.battle-form {
+				margin: 0;
 			}
 
 			.battle-panel h2 {
 				margin: 0 0 20px;
-				font-size: 1.25rem;
+				color: var(--arcade-purple);
+				font-size: clamp(0.8rem, 2vw, 1rem);
+				line-height: 1.6;
+				text-shadow: var(--arcade-purple-glow);
 			}
 
 			.player-grid {
 				display: grid;
 				grid-template-columns: repeat(2, minmax(0, 1fr));
-				gap: 16px;
+				gap: 18px;
 			}
 
 			.player-field {
 				display: grid;
 				gap: 8px;
+				opacity: 0;
+				transform: translateY(18px);
+				animation: float-in 700ms ease-out forwards;
+			}
+
+			.player-field:nth-child(2) {
+				animation-delay: 120ms;
 			}
 
 			.player-field span {
-				color: #d1d5db;
+				color: var(--arcade-green);
+				font-size: 0.68rem;
 				font-weight: 700;
+				text-shadow: 0 0 8px rgb(95 237 131 / 70%);
 			}
 
 			.player-field input {
 				width: 100%;
-				padding: 12px 14px;
-				border: 1px solid #4b5563;
+				padding: 14px;
+				border: 1px solid var(--arcade-purple-border);
 				border-radius: 6px;
-				color: #f9fafb;
-				background: #111827;
+				color: var(--arcade-text);
+				background: rgb(2 4 20 / 84%);
+				box-shadow: inset 0 0 16px rgb(138 43 226 / 18%);
+				font-size: 0.72rem;
+				line-height: 1.5;
 			}
 
-			.player-field input:focus {
-				border-color: #22c55e;
-				outline: 3px solid rgb(34 197 94 / 25%);
+			.player-field input::placeholder {
+				color: rgb(184 184 217 / 58%);
+			}
+
+			.player-field input:focus,
+			.player-field input:focus-visible {
+				border-color: var(--arcade-green);
+				box-shadow:
+					inset 0 0 16px rgb(95 237 131 / 14%),
+					0 0 18px rgb(95 237 131 / 45%);
+			}
+
+			.player-field[data-invalid="true"] span,
+			.field-error {
+				color: var(--arcade-error);
+				text-shadow:
+					0 0 4px rgb(255 51 102 / 95%),
+					0 0 12px rgb(255 51 102 / 78%),
+					0 0 24px rgb(255 51 102 / 45%);
+			}
+
+			.player-field[data-invalid="true"] input {
+				border-color: var(--arcade-error);
+				outline: 2px solid rgb(255 51 102 / 32%);
+				box-shadow:
+					inset 0 0 16px rgb(255 51 102 / 16%),
+					0 0 16px rgb(255 51 102 / 48%),
+					0 0 28px rgb(255 51 102 / 24%);
+			}
+
+			.field-error {
+				min-height: 2.9em;
+				margin: 0;
+				font-size: 0.56rem;
+				line-height: 1.6;
 			}
 
 			.battle-button {
 				width: 100%;
-				margin-top: 20px;
-				padding: 12px 18px;
-				border: 0;
+				margin-top: 22px;
+				padding: 16px 18px;
+				border: 1px solid rgb(95 237 131 / 78%);
 				border-radius: 6px;
-				color: #04130a;
-				background: #22c55e;
+				color: #070711;
+				background: linear-gradient(135deg, var(--arcade-green), var(--arcade-purple), var(--arcade-green));
+				background-size: 220% 220%;
+				box-shadow:
+					0 0 16px rgb(95 237 131 / 44%),
+					0 0 26px rgb(138 43 226 / 28%);
+				font-size: 0.8rem;
 				font-weight: 800;
 				cursor: pointer;
+				transition:
+					transform 180ms ease,
+					box-shadow 180ms ease,
+					filter 180ms ease;
 			}
 
 			.battle-button:hover {
-				background: #4ade80;
+				filter: brightness(1.12);
+				transform: translateY(-2px);
+				box-shadow:
+					0 0 22px rgb(95 237 131 / 70%),
+					0 0 34px rgb(138 43 226 / 56%);
+			}
+
+			.battle-button:focus-visible {
+				box-shadow:
+					0 0 0 4px rgb(10 10 26 / 88%),
+					0 0 0 8px rgb(95 237 131 / 44%),
+					0 0 22px rgb(95 237 131 / 70%),
+					0 0 34px rgb(138 43 226 / 56%);
 			}
 
 			.battle-button:disabled {
 				cursor: wait;
-				opacity: 0.7;
+				filter: saturate(0.75);
+				animation: button-disabled-pulse 900ms ease-in-out infinite alternate;
 			}
 
 			.status-message {
 				min-height: 24px;
-				margin: 16px 0 0;
-				color: #d1d5db;
+				margin: 18px 0 0;
+				color: var(--arcade-muted);
+				font-size: 0.7rem;
+				line-height: 1.8;
 			}
 
 			.status-message[data-type="error"] {
-				color: #fca5a5;
+				color: var(--arcade-error);
+				text-shadow:
+					0 0 4px rgb(255 51 102 / 95%),
+					0 0 12px rgb(255 51 102 / 78%),
+					0 0 24px rgb(255 51 102 / 45%);
 			}
 
 			.status-message[data-type="success"] {
-				color: #86efac;
+				color: var(--arcade-green);
+				text-shadow: var(--arcade-green-glow);
+			}
+
+			.status-message[data-type="loading"] {
+				animation: loading-shift 1.15s linear infinite alternate;
+			}
+
+			.battle-panel.is-shaking {
+				border-color: rgb(255 51 102 / 82%);
+				box-shadow:
+					0 0 0 1px rgb(255 51 102 / 30%),
+					0 0 24px rgb(255 51 102 / 24%),
+					inset 0 0 28px rgb(255 51 102 / 12%);
+			}
+
+			.is-shaking {
+				animation: error-shake 420ms cubic-bezier(.36, .07, .19, .97);
 			}
 
 			.results {
 				display: grid;
-				grid-template-columns: 1fr auto 1fr;
+				grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 				align-items: stretch;
 				gap: 16px;
 				margin-top: 24px;
 			}
 
-			.result-card {
-				padding: 20px;
-				border: 1px solid #374151;
+			:global(.result-card) {
+				position: relative;
+				min-width: 0;
+				overflow: hidden;
+				padding: 22px;
+				border: 1px solid var(--arcade-purple-border);
 				border-radius: 8px;
-				background: #172033;
+				background:
+					linear-gradient(180deg, rgb(95 237 131 / 5%), transparent 42%),
+					var(--arcade-panel-strong);
+				box-shadow:
+					0 0 20px rgb(138 43 226 / 20%),
+					inset 0 0 22px rgb(95 237 131 / 8%);
 			}
 
-			.player-label,
-			.result-meta,
-			.result-range {
+			:global(.result-card::after) {
+				position: absolute;
+				inset: -45% auto -45% -75%;
+				width: 50%;
+				content: "";
+				background: linear-gradient(
+					110deg,
+					transparent,
+					rgb(255 255 255 / 12%),
+					rgb(95 237 131 / 12%),
+					transparent
+				);
+				transform: skewX(-18deg);
+				animation: card-shimmer 4.5s ease-in-out infinite;
+				pointer-events: none;
+			}
+
+			:global(.player-label),
+			:global(.result-meta),
+			:global(.result-range) {
 				margin: 0;
-				color: #9ca3af;
+				color: var(--arcade-muted);
+				font-size: 0.62rem;
+				line-height: 1.8;
 			}
 
-			.result-card h3 {
-				margin: 8px 0 16px;
+			:global(.result-card h3) {
+				margin: 12px 0 18px;
+				color: var(--arcade-text);
 				overflow-wrap: anywhere;
-				font-size: 1.5rem;
+				font-size: clamp(0.9rem, 2vw, 1.2rem);
+				line-height: 1.45;
+				text-shadow: 0 0 12px rgb(95 237 131 / 52%);
 			}
 
-			.contribution-total {
+			:global(.contribution-total) {
 				margin: 0;
-				color: #86efac;
-				font-size: 2rem;
+				color: var(--arcade-green);
+				font-size: clamp(1.35rem, 4vw, 2rem);
 				font-weight: 800;
+				line-height: 1.5;
+				text-shadow: var(--arcade-green-glow);
 			}
 
-			.result-range {
+			:global(.result-range) {
 				margin-top: 12px;
 			}
 
-			.versus {
+			:global(.contribution-graph) {
 				display: grid;
-				place-items: center;
-				min-width: 56px;
-				color: #c7d2fe;
-				font-weight: 900;
+				grid-auto-rows: max-content;
+				gap: 4px;
+				width: 100%;
+				max-width: 100%;
+				margin-top: 18px;
+				overflow-x: auto;
+				overscroll-behavior-inline: contain;
+				padding: 8px;
+				border: 1px solid rgb(95 237 131 / 14%);
+				border-radius: 6px;
+				background: rgb(0 0 0 / 20%);
 			}
 
-			@media (max-width: 720px) {
-				.page-shell {
-					padding: 32px 0;
-				}
+			:global(.contribution-week) {
+				display: grid;
+				grid-template-columns: repeat(7, 12px);
+				gap: 4px;
+			}
 
-				.player-grid,
+			:global(.contribution-day) {
+				display: block;
+				width: 12px;
+				height: 12px;
+				border-radius: 2px;
+				box-shadow: inset 0 0 0 1px rgb(255 255 255 / 8%);
+				transition:
+					transform 140ms ease,
+					box-shadow 140ms ease,
+					outline-color 140ms ease;
+			}
+
+			:global(.contribution-day:hover) {
+				position: relative;
+				z-index: 2;
+				outline: 1px solid var(--arcade-green);
+				transform: scale(1.3);
+				box-shadow:
+					0 0 10px rgb(95 237 131 / 86%),
+					0 0 18px rgb(138 43 226 / 55%);
+			}
+
+			:global(.graph-empty) {
+				margin: 0;
+				color: var(--arcade-muted);
+			}
+
+			:global(.versus) {
+				display: grid;
+				place-items: center;
+				min-width: 64px;
+				align-self: center;
+				padding: 14px 12px;
+				border: 1px solid rgb(95 237 131 / 66%);
+				border-radius: 999px;
+				color: var(--arcade-text);
+				background: linear-gradient(135deg, var(--arcade-green), var(--arcade-purple), var(--arcade-green));
+				background-size: 260% 260%;
+				box-shadow:
+					0 0 18px rgb(95 237 131 / 60%),
+					0 0 24px rgb(138 43 226 / 55%);
+				font-size: 0.72rem;
+				font-weight: 900;
+				text-shadow: 0 0 8px rgb(0 0 0 / 90%);
+				animation: vs-gradient 2.4s linear infinite;
+			}
+
+			@media (max-width: 1024px) {
 				.results {
 					grid-template-columns: 1fr;
 				}
 
-				.versus {
-					min-height: 40px;
+				:global(.versus) {
+					width: min(100%, 120px);
+					min-height: 44px;
+					justify-self: center;
+				}
+			}
+
+			@media (max-width: 768px) {
+				.page-shell {
+					width: min(100% - 24px, 960px);
+					padding: 28px 0;
+				}
+
+				.hero {
+					margin-bottom: 24px;
+				}
+
+				.hero h1 {
+					font-size: 1.72rem;
+					line-height: 1.3;
+				}
+
+				.hero p {
+					margin-top: 14px;
+					font-size: 0.62rem;
+				}
+
+				.battle-panel {
+					padding: 18px;
+				}
+
+				.battle-panel h2 {
+					font-size: 0.72rem;
+				}
+
+				.player-grid {
+					grid-template-columns: 1fr;
+					gap: 14px;
+				}
+
+				.player-field span,
+				.status-message,
+				:global(.player-label),
+				:global(.result-meta),
+				:global(.result-range) {
+					font-size: 0.58rem;
+				}
+
+				.player-field input {
+					min-height: 48px;
+					padding: 12px;
+					font-size: 0.64rem;
+				}
+
+				.battle-button {
+					min-height: 50px;
+					padding: 14px 16px;
+					font-size: 0.7rem;
+				}
+
+				.results {
+					gap: 14px;
+					margin-top: 18px;
+				}
+
+				:global(.result-card) {
+					padding: 18px;
+				}
+
+				:global(.result-card h3) {
+					font-size: 0.82rem;
+				}
+
+				:global(.contribution-total) {
+					font-size: 1.18rem;
+				}
+
+				:global(.versus) {
+					min-height: 38px;
+					font-size: 0.62rem;
+				}
+			}
+
+			@media (max-width: 480px) {
+				.page-shell {
+					width: min(100% - 18px, 960px);
+					padding: 22px 0;
+				}
+
+				.hero h1 {
+					font-size: 1.36rem;
+				}
+
+				.battle-panel {
+					padding: 14px;
+				}
+
+				:global(.result-card) {
+					padding: 14px;
+				}
+
+				:global(.contribution-week) {
+					grid-template-columns: repeat(7, 10px);
+					gap: 3px;
+				}
+
+				:global(.contribution-day) {
+					width: 10px;
+					height: 10px;
+				}
+			}
+
+			@keyframes neon-pulse {
+				0%,
+				100% {
+					text-shadow:
+						0 0 4px rgb(95 237 131 / 90%),
+						0 0 16px rgb(95 237 131 / 75%),
+						0 0 30px rgb(138 43 226 / 70%);
+				}
+
+				50% {
+					text-shadow:
+						0 0 2px rgb(95 237 131 / 70%),
+						0 0 10px rgb(95 237 131 / 58%),
+						0 0 22px rgb(138 43 226 / 58%);
+				}
+			}
+
+			@keyframes scanline-drift {
+				from {
+					background-position: 0 0, 0 0;
+				}
+
+				to {
+					background-position: 0 16px, 16px 0;
+				}
+			}
+
+			@keyframes float-in {
+				to {
+					opacity: 1;
+					transform: translateY(0);
+				}
+			}
+
+			@keyframes loading-shift {
+				from {
+					color: var(--arcade-green);
+					text-shadow: var(--arcade-green-glow);
+				}
+
+				to {
+					color: var(--arcade-purple);
+					text-shadow: var(--arcade-purple-glow);
+				}
+			}
+
+			@keyframes button-disabled-pulse {
+				from {
+					opacity: 0.58;
+				}
+
+				to {
+					opacity: 0.86;
+				}
+			}
+
+			@keyframes error-shake {
+				10%,
+				90% {
+					transform: translateX(-1px);
+				}
+
+				20%,
+				80% {
+					transform: translateX(2px);
+				}
+
+				30%,
+				50%,
+				70% {
+					transform: translateX(-4px);
+				}
+
+				40%,
+				60% {
+					transform: translateX(4px);
+				}
+			}
+
+			@keyframes card-shimmer {
+				0%,
+				42% {
+					left: -75%;
+				}
+
+				72%,
+				100% {
+					left: 135%;
+				}
+			}
+
+			@keyframes vs-gradient {
+				from {
+					background-position: 0% 50%;
+				}
+
+				to {
+					background-position: 200% 50%;
+				}
+			}
+
+			@media (prefers-reduced-motion: reduce) {
+				*,
+				*::before,
+				*::after {
+					scroll-behavior: auto !important;
+					animation-duration: 1ms !important;
+					animation-iteration-count: 1 !important;
+					transition-duration: 1ms !important;
+				}
+
+				:global(.contribution-day:hover) {
+					transform: none;
 				}
 			}
 		</style>

@@ -1,66 +1,76 @@
-🌐 [Português (Brasil)](README.pt_BR.md) | [Español](README.es.md)
+# Contribution Arena
 
-# 🎮 Mona Mayhem
+Contribution Arena is an Astro web app that compares two GitHub users by their contribution graphs. Enter two usernames, start a battle, and the app fetches each user's public contribution data through a server-side API route before rendering totals and graph previews in an arcade-style interface.
 
-**VS Code & GitHub Copilot CLI Workshop** — Build a GitHub Contribution Battle Arena
+## Features
 
-A workshop template for building a retro arcade-themed website with Astro that compares GitHub contribution graphs of two users. This is the **starting point** — you'll build the app step by step using GitHub Copilot.
+- Compare two GitHub users side by side.
+- Fetch contribution graph data through an Astro API endpoint.
+- Cache contribution responses briefly to reduce repeated upstream requests.
+- Validate GitHub usernames before making API calls.
+- Use a responsive, keyboard-friendly battle form that works on desktop and mobile.
+- Run locally on your network for phone and tablet testing.
 
-![Mona Mayhem Screenshot](https://github.com/user-attachments/assets/5eca79e2-cb9f-4e93-aa0d-23666ebde3b7)
-*What you'll build by the end of the workshop*
+## Requirements
 
-## 📚 Workshop
-
-The workshop supports two tracks — follow the one that matches your preferred workflow:
-
-- **VS Code track** — Chat, Plan Mode, Agent Mode, background agents, and editor-native review loops
-- **CLI track** — `copilot`, `@file` context, `/plan`, autonomous edits, `/fleet`, `/delegate`, and `/review`
-
-| Part | Title | Copilot Focus |
-|------|-------|---------------|
-| [00](workshop/00-overview.md) | Overview | Track selection and learning goals |
-| [01](workshop/01-setup.md) | Setup & Context Engineering | Instructions, permissions, and environment setup |
-| [02](workshop/02-plan-and-scaffold.md) | Plan & Scaffold | Planning the API and page architecture |
-| [03](workshop/03-agent-mode.md) | Build the Game | Agentic implementation and iteration |
-| [04](workshop/04-design-vibes.md) | Design-First Theming | Visual design planning and implementation |
-| [05](workshop/05-polish.md) | Polish & Parallel Work | Parallelism, reviews, and quality passes |
-| [06](workshop/06-bonus.md) | Bonus & Extensions | Open-ended feature ideas and extra Copilot experiments |
-
-## 🚀 Quick Start
-
-1. **Create your own repo first** by either:
-   - clicking **Use this template** to create a new repo, or
-   - forking this repository.
-2. Choose your workshop path:
-   - **VS Code:** clone your repo and open it in VS Code.
-   - **GitHub Copilot CLI:** clone your repo locally, install `copilot`, and work from your terminal.
-3. Follow the [workshop guide](workshop/00-overview.md)
-
-## Prerequisites
-
-### Shared
-
-- GitHub Copilot (Pro, Business, or Enterprise)
-- Git
 - Node.js
+- npm
+- Git, if you are cloning or contributing to the project
 
-### VS Code track
+## Getting Started
 
-- VS Code v1.107+
-- GitHub Copilot extension signed in
+Install dependencies:
 
-### CLI track
+```bash
+npm install
+```
 
-- GitHub Copilot CLI (`copilot`)
-- Node.js 22+ if you plan to install the CLI via `npm install -g @github/copilot`
-- Or Homebrew / WinGet if you prefer a native package manager install
+Start the local development server:
 
-## Technology Stack
+```bash
+npm run dev
+```
 
-- **Framework**: [Astro](https://astro.build/) v5
-- **Runtime**: Node.js with [@astrojs/node](https://docs.astro.build/en/guides/integrations-guide/node/) adapter
-- **Font**: Press Start 2P (retro gaming font)
-- **API**: GitHub's contribution graph API
+Open the local URL printed by Astro, usually:
+
+```text
+http://localhost:4321/
+```
+
+## Mobile Testing
+
+To test from a phone or tablet, start Astro in network mode:
+
+```bash
+npm run dev:network
+```
+
+Open the printed Network URL on your mobile device. The port can change if Astro finds the default port busy, so trust the exact URL printed in the terminal.
+
+Make sure your computer and mobile device are on the same Wi-Fi network. If Windows Firewall prompts you, allow Node.js or Astro to accept connections on the local network. Do not open `localhost` or `127.0.0.1` on the phone; those addresses point to the phone itself, not your computer.
+
+## Scripts
+
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Start the Astro dev server for local desktop development. |
+| `npm run dev:network` | Start the Astro dev server on the local network for mobile testing. |
+| `npm run build` | Build the app for production. |
+| `npm run preview` | Preview the production build locally. |
+| `npm run lint` | Run ESLint against the source files. |
+| `npm run lint:fix` | Run ESLint and apply safe automatic fixes. |
+
+## Tech Stack
+
+- Astro 5
+- Astro Node adapter for server-rendered API routes
+- TypeScript
+- ESLint
+- GitHub contribution graph data from `https://github.com/{username}.contribs`
+
+## Origin
+
+This project began from Mona's workshop template and has been adapted into a standalone GitHub contribution battle app.
 
 ## License
 
