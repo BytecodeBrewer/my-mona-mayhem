@@ -42,18 +42,40 @@
 		</main>
 
 		<script>
-			const playerOneInput = document.getElementById('player-one');
-			const playerTwoInput = document.getElementById('player-two');
-			const battleButton = document.getElementById('battle-button');
-			const statusMessage = document.getElementById('status-message');
-			const results = document.getElementById('results');
+			type StatusType = 'info' | 'loading' | 'success' | 'error';
 
-			const setStatus = (message, type = 'info') => {
+			type ContributionData = {
+				from?: string;
+				to?: string;
+				total_contributions?: number;
+			};
+
+			type ErrorResponse = {
+				error?: string;
+			};
+
+			const playerOneInput = document.querySelector('#player-one');
+			const playerTwoInput = document.querySelector('#player-two');
+			const battleButton = document.querySelector('#battle-button');
+			const statusMessage = document.querySelector('#status-message');
+			const results = document.querySelector('#results');
+
+			if (
+				!(playerOneInput instanceof HTMLInputElement) ||
+				!(playerTwoInput instanceof HTMLInputElement) ||
+				!(battleButton instanceof HTMLButtonElement) ||
+				!(statusMessage instanceof HTMLElement) ||
+				!(results instanceof HTMLElement)
+			) {
+				throw new Error('Battle page controls are missing.');
+			}
+
+			const setStatus = (message: string, type: StatusType = 'info'): void => {
 				statusMessage.textContent = message;
 				statusMessage.dataset.type = type;
 			};
 
-			const formatDateRange = (player) => {
+			const formatDateRange = (player: ContributionData): string => {
 				if (!player.from || !player.to) {
 					return 'Date range unavailable';
 				}
@@ -61,37 +83,59 @@
 				return `${player.from} to ${player.to}`;
 			};
 
-			const renderPlayerCard = (label, username, data) => {
+			const renderPlayerCard = (
+				label: string,
+				username: string,
+				data: ContributionData
+			): HTMLElement => {
 				const total = data.total_contributions ?? 'Unknown';
 				const dateRange = formatDateRange(data);
+				const card = document.createElement('article');
+				const playerLabel = document.createElement('p');
+				const heading = document.createElement('h3');
+				const contributionTotal = document.createElement('p');
+				const resultMeta = document.createElement('p');
+				const resultRange = document.createElement('p');
 
-				return `
-					<article class="result-card">
-						<p class="player-label">${label}</p>
-						<h3>${username}</h3>
-						<p class="contribution-total">${total}</p>
-						<p class="result-meta">Total contributions</p>
-						<p class="result-range">${dateRange}</p>
-					</article>
-				`;
+				card.className = 'result-card';
+				playerLabel.className = 'player-label';
+				contributionTotal.className = 'contribution-total';
+				resultMeta.className = 'result-meta';
+				resultRange.className = 'result-range';
+
+				playerLabel.textContent = label;
+				heading.textContent = username;
+				contributionTotal.textContent = String(total);
+				resultMeta.textContent = 'Total contributions';
+				resultRange.textContent = dateRange;
+
+				card.append(playerLabel, heading, contributionTotal, resultMeta, resultRange);
+
+				return card;
 			};
 
-			const fetchContributions = async (username) => {
+			const fetchContributions = async (username: string): Promise<ContributionData> => {
 				const response = await fetch(`/api/contributions/${encodeURIComponent(username)}`);
 				const data = await response.json();
 
 				if (!response.ok) {
-					throw new Error(data.error || 'Could not fetch contribution data');
+					const errorData = data as ErrorResponse;
+					const message =
+						errorData && typeof errorData.error === 'string'
+							? errorData.error
+							: 'Could not fetch contribution data';
+
+					throw new Error(message);
 				}
 
-				return data;
+				return data as ContributionData;
 			};
 
 			const runBattle = async () => {
 				const playerOne = playerOneInput.value.trim();
 				const playerTwo = playerTwoInput.value.trim();
 
-				results.innerHTML = '';
+				results.replaceChildren();
 
 				if (!playerOne || !playerTwo) {
 					setStatus('Please enter both GitHub usernames before battling.', 'error');
@@ -106,15 +150,19 @@
 						fetchContributions(playerOne),
 						fetchContributions(playerTwo),
 					]);
+					const versus = document.createElement('div');
 
-					results.innerHTML = `
-						${renderPlayerCard('Player 1', playerOne, playerOneData)}
-						<div class="versus">VS</div>
-						${renderPlayerCard('Player 2', playerTwo, playerTwoData)}
-					`;
+					versus.className = 'versus';
+					versus.textContent = 'VS';
+					results.append(
+						renderPlayerCard('Player 1', playerOne, playerOneData),
+						versus,
+						renderPlayerCard('Player 2', playerTwo, playerTwoData)
+					);
 					setStatus('Battle results loaded.', 'success');
 				} catch (error) {
-					setStatus(error.message, 'error');
+					const message = error instanceof Error ? error.message : 'Could not fetch contribution data';
+					setStatus(message, 'error');
 				} finally {
 					battleButton.disabled = false;
 				}
