@@ -26,19 +26,37 @@
 			<section class="battle-panel" aria-labelledby="battle-title">
 				<h2 id="battle-title">Choose Your Players</h2>
 
-				<div class="player-grid">
-					<label class="player-field" for="player-one">
-						<span>Player 1</span>
-						<input id="player-one" name="player-one" type="text" autocomplete="off" placeholder="octocat" />
-					</label>
+				<form id="battle-form" class="battle-form">
+					<div class="player-grid">
+						<label class="player-field" for="player-one">
+							<span>Player 1</span>
+							<input
+								id="player-one"
+								name="player-one"
+								type="text"
+								autocomplete="off"
+								placeholder="octocat"
+								aria-describedby="player-one-error"
+							/>
+							<p id="player-one-error" class="field-error" aria-live="polite"></p>
+						</label>
 
-					<label class="player-field" for="player-two">
-						<span>Player 2</span>
-						<input id="player-two" name="player-two" type="text" autocomplete="off" placeholder="torvalds" />
-					</label>
-				</div>
+						<label class="player-field" for="player-two">
+							<span>Player 2</span>
+							<input
+								id="player-two"
+								name="player-two"
+								type="text"
+								autocomplete="off"
+								placeholder="torvalds"
+								aria-describedby="player-two-error"
+							/>
+							<p id="player-two-error" class="field-error" aria-live="polite"></p>
+						</label>
+					</div>
 
-				<button id="battle-button" class="battle-button" type="button">Battle</button>
+					<button id="battle-button" class="battle-button" type="submit">Battle</button>
+				</form>
 				<p id="status-message" class="status-message" aria-live="polite">
 					Enter two GitHub usernames to start a battle.
 				</p>
@@ -78,16 +96,29 @@
 			}
 
 			const FALLBACK_COLORS = ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'];
+			const API_UNREACHABLE_MESSAGE =
+				'Could not reach the contribution API. Open the app from the Astro network URL and make sure your device is on the same Wi-Fi.';
+			const USERNAME_PATTERN = /^(?!-)(?!.*--)[a-zA-Z0-9-]{1,39}(?<!-)$/;
+			const USERNAME_RULES =
+				'Use 1-39 letters, numbers, or single hyphens. No leading or trailing hyphens.';
 
+			const battlePanel = document.querySelector('.battle-panel');
+			const battleForm = document.querySelector('#battle-form');
 			const playerOneInput = document.querySelector('#player-one');
 			const playerTwoInput = document.querySelector('#player-two');
+			const playerOneError = document.querySelector('#player-one-error');
+			const playerTwoError = document.querySelector('#player-two-error');
 			const battleButton = document.querySelector('#battle-button');
 			const statusMessage = document.querySelector('#status-message');
 			const results = document.querySelector('#results');
 
 			if (
+				!(battlePanel instanceof HTMLElement) ||
+				!(battleForm instanceof HTMLFormElement) ||
 				!(playerOneInput instanceof HTMLInputElement) ||
 				!(playerTwoInput instanceof HTMLInputElement) ||
+				!(playerOneError instanceof HTMLElement) ||
+				!(playerTwoError instanceof HTMLElement) ||
 				!(battleButton instanceof HTMLButtonElement) ||
 				!(statusMessage instanceof HTMLElement) ||
 				!(results instanceof HTMLElement)
@@ -98,6 +129,75 @@
 			const setStatus = (message: string, type: StatusType = 'info'): void => {
 				statusMessage.textContent = message;
 				statusMessage.dataset.type = type;
+			};
+
+			const replayShake = (...elements: HTMLElement[]): void => {
+				for (const element of elements) {
+					element.classList.remove('is-shaking');
+					void element.offsetWidth;
+					element.classList.add('is-shaking');
+					window.setTimeout(() => element.classList.remove('is-shaking'), 430);
+				}
+			};
+
+			const setFieldError = (
+				input: HTMLInputElement,
+				errorElement: HTMLElement,
+				message = ''
+			): void => {
+				const field = input.closest('.player-field');
+
+				input.setAttribute('aria-invalid', message ? 'true' : 'false');
+				errorElement.textContent = message;
+
+				if (field instanceof HTMLElement) {
+					field.dataset.invalid = message ? 'true' : 'false';
+				}
+			};
+
+			const validateUsername = (username: string, label: string): string => {
+				if (!username) {
+					return `${label} username is required.`;
+				}
+
+				if (!USERNAME_PATTERN.test(username)) {
+					return `${label}: ${USERNAME_RULES}`;
+				}
+
+				return '';
+			};
+
+			const validatePlayers = (): boolean => {
+				const playerOne = playerOneInput.value.trim();
+				const playerTwo = playerTwoInput.value.trim();
+				const playerOneMessage = validateUsername(playerOne, 'Player 1');
+				const playerTwoMessage = validateUsername(playerTwo, 'Player 2');
+				const invalidFields: HTMLElement[] = [];
+
+				setFieldError(playerOneInput, playerOneError, playerOneMessage);
+				setFieldError(playerTwoInput, playerTwoError, playerTwoMessage);
+
+				for (const input of [playerOneInput, playerTwoInput]) {
+					const field = input.closest('.player-field');
+
+					if (field instanceof HTMLElement && input.getAttribute('aria-invalid') === 'true') {
+						invalidFields.push(field);
+					}
+				}
+
+				if (invalidFields.length === 0) {
+					return true;
+				}
+
+				setStatus(
+					invalidFields.length === 2
+						? 'Check both highlighted username fields.'
+						: 'Check the highlighted username field.',
+					'error'
+				);
+				replayShake(battlePanel, statusMessage, ...invalidFields);
+
+				return false;
 			};
 
 			const formatDateRange = (player: ContributionData): string => {
@@ -199,8 +299,25 @@
 			};
 
 			const fetchContributions = async (username: string): Promise<ContributionData> => {
-				const response = await fetch(`/api/contributions/${encodeURIComponent(username)}`);
-				const data = await response.json();
+				let response: Response;
+
+				try {
+					response = await fetch(`/api/contributions/${encodeURIComponent(username)}`);
+				} catch (_error) {
+					throw new Error(API_UNREACHABLE_MESSAGE);
+				}
+
+				let data: unknown;
+
+				try {
+					data = await response.json();
+				} catch (_error) {
+					if (!response.ok) {
+						throw new Error('The contribution API returned an unreadable error response.');
+					}
+
+					throw new Error('The contribution API returned an unreadable response.');
+				}
 
 				if (!response.ok) {
 					const errorData = data as ErrorResponse;
@@ -221,8 +338,7 @@
 
 				results.replaceChildren();
 
-				if (!playerOne || !playerTwo) {
-					setStatus('Please enter both GitHub usernames before battling.', 'error');
+				if (!validatePlayers()) {
 					return;
 				}
 
@@ -247,17 +363,24 @@
 				} catch (error) {
 					const message = error instanceof Error ? error.message : 'Could not fetch contribution data';
 					setStatus(message, 'error');
+					replayShake(battlePanel, statusMessage);
 				} finally {
 					battleButton.disabled = false;
 				}
 			};
 
-			battleButton.addEventListener('click', runBattle);
+			battleForm.addEventListener('submit', (event) => {
+				event.preventDefault();
+				runBattle();
+			});
 
 			[playerOneInput, playerTwoInput].forEach((input) => {
-				input.addEventListener('keydown', (event) => {
-					if (event.key === 'Enter') {
-						runBattle();
+				input.addEventListener('input', () => {
+					const errorElement = input === playerOneInput ? playerOneError : playerTwoError;
+
+					if (input.getAttribute('aria-invalid') === 'true') {
+						setFieldError(input, errorElement);
+						setStatus('Enter two GitHub usernames to start a battle.', 'info');
 					}
 				});
 			});
@@ -341,6 +464,11 @@
 				font: inherit;
 			}
 
+			:focus-visible {
+				outline: 3px solid rgb(95 237 131 / 72%);
+				outline-offset: 4px;
+			}
+
 			.page-shell {
 				width: min(960px, calc(100% - 32px));
 				margin: 0 auto;
@@ -383,6 +511,10 @@
 					0 0 0 1px rgb(138 43 226 / 18%),
 					0 0 24px rgb(95 237 131 / 14%),
 					inset 0 0 28px rgb(138 43 226 / 10%);
+			}
+
+			.battle-form {
+				margin: 0;
 			}
 
 			.battle-panel h2 {
@@ -437,10 +569,34 @@
 			.player-field input:focus,
 			.player-field input:focus-visible {
 				border-color: var(--arcade-green);
-				outline: 2px solid rgb(95 237 131 / 38%);
 				box-shadow:
 					inset 0 0 16px rgb(95 237 131 / 14%),
 					0 0 18px rgb(95 237 131 / 45%);
+			}
+
+			.player-field[data-invalid="true"] span,
+			.field-error {
+				color: var(--arcade-error);
+				text-shadow:
+					0 0 4px rgb(255 51 102 / 95%),
+					0 0 12px rgb(255 51 102 / 78%),
+					0 0 24px rgb(255 51 102 / 45%);
+			}
+
+			.player-field[data-invalid="true"] input {
+				border-color: var(--arcade-error);
+				outline: 2px solid rgb(255 51 102 / 32%);
+				box-shadow:
+					inset 0 0 16px rgb(255 51 102 / 16%),
+					0 0 16px rgb(255 51 102 / 48%),
+					0 0 28px rgb(255 51 102 / 24%);
+			}
+
+			.field-error {
+				min-height: 2.9em;
+				margin: 0;
+				font-size: 0.56rem;
+				line-height: 1.6;
 			}
 
 			.battle-button {
@@ -473,8 +629,11 @@
 			}
 
 			.battle-button:focus-visible {
-				outline: 3px solid rgb(95 237 131 / 44%);
-				outline-offset: 4px;
+				box-shadow:
+					0 0 0 4px rgb(10 10 26 / 88%),
+					0 0 0 8px rgb(95 237 131 / 44%),
+					0 0 22px rgb(95 237 131 / 70%),
+					0 0 34px rgb(138 43 226 / 56%);
 			}
 
 			.battle-button:disabled {
@@ -493,7 +652,10 @@
 
 			.status-message[data-type="error"] {
 				color: var(--arcade-error);
-				text-shadow: 0 0 10px rgb(255 51 102 / 72%);
+				text-shadow:
+					0 0 4px rgb(255 51 102 / 95%),
+					0 0 12px rgb(255 51 102 / 78%),
+					0 0 24px rgb(255 51 102 / 45%);
 			}
 
 			.status-message[data-type="success"] {
@@ -503,6 +665,18 @@
 
 			.status-message[data-type="loading"] {
 				animation: loading-shift 1.15s linear infinite alternate;
+			}
+
+			.battle-panel.is-shaking {
+				border-color: rgb(255 51 102 / 82%);
+				box-shadow:
+					0 0 0 1px rgb(255 51 102 / 30%),
+					0 0 24px rgb(255 51 102 / 24%),
+					inset 0 0 28px rgb(255 51 102 / 12%);
+			}
+
+			.is-shaking {
+				animation: error-shake 420ms cubic-bezier(.36, .07, .19, .97);
 			}
 
 			.results {
@@ -644,18 +818,120 @@
 				animation: vs-gradient 2.4s linear infinite;
 			}
 
-			@media (max-width: 720px) {
-				.page-shell {
-					padding: 32px 0;
-				}
-
-				.player-grid,
+			@media (max-width: 1024px) {
 				.results {
 					grid-template-columns: 1fr;
 				}
 
 				:global(.versus) {
-					min-height: 40px;
+					width: min(100%, 120px);
+					min-height: 44px;
+					justify-self: center;
+				}
+			}
+
+			@media (max-width: 768px) {
+				.page-shell {
+					width: min(100% - 24px, 960px);
+					padding: 28px 0;
+				}
+
+				.hero {
+					margin-bottom: 24px;
+				}
+
+				.hero h1 {
+					font-size: 1.72rem;
+					line-height: 1.3;
+				}
+
+				.hero p {
+					margin-top: 14px;
+					font-size: 0.62rem;
+				}
+
+				.battle-panel {
+					padding: 18px;
+				}
+
+				.battle-panel h2 {
+					font-size: 0.72rem;
+				}
+
+				.player-grid {
+					grid-template-columns: 1fr;
+					gap: 14px;
+				}
+
+				.player-field span,
+				.status-message,
+				:global(.player-label),
+				:global(.result-meta),
+				:global(.result-range) {
+					font-size: 0.58rem;
+				}
+
+				.player-field input {
+					min-height: 48px;
+					padding: 12px;
+					font-size: 0.64rem;
+				}
+
+				.battle-button {
+					min-height: 50px;
+					padding: 14px 16px;
+					font-size: 0.7rem;
+				}
+
+				.results {
+					gap: 14px;
+					margin-top: 18px;
+				}
+
+				:global(.result-card) {
+					padding: 18px;
+				}
+
+				:global(.result-card h3) {
+					font-size: 0.82rem;
+				}
+
+				:global(.contribution-total) {
+					font-size: 1.18rem;
+				}
+
+				:global(.versus) {
+					min-height: 38px;
+					font-size: 0.62rem;
+				}
+			}
+
+			@media (max-width: 480px) {
+				.page-shell {
+					width: min(100% - 18px, 960px);
+					padding: 22px 0;
+				}
+
+				.hero h1 {
+					font-size: 1.36rem;
+				}
+
+				.battle-panel {
+					padding: 14px;
+				}
+
+				:global(.result-card) {
+					padding: 14px;
+				}
+
+				:global(.contribution-week) {
+					grid-template-columns: repeat(7, 10px);
+					gap: 3px;
+				}
+
+				:global(.contribution-day) {
+					width: 10px;
+					height: 10px;
 				}
 			}
 
@@ -712,6 +988,29 @@
 
 				to {
 					opacity: 0.86;
+				}
+			}
+
+			@keyframes error-shake {
+				10%,
+				90% {
+					transform: translateX(-1px);
+				}
+
+				20%,
+				80% {
+					transform: translateX(2px);
+				}
+
+				30%,
+				50%,
+				70% {
+					transform: translateX(-4px);
+				}
+
+				40%,
+				60% {
+					transform: translateX(4px);
 				}
 			}
 

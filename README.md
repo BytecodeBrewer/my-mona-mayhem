@@ -36,6 +36,22 @@ The workshop supports two tracks — follow the one that matches your preferred 
    - **GitHub Copilot CLI:** clone your repo locally, install `copilot`, and work from your terminal.
 3. Follow the [workshop guide](workshop/00-overview.md)
 
+## 📱 Mobile Testing
+
+To test the app from a phone or tablet, run the dev server on your local network:
+
+```bash
+npm run dev:network
+```
+
+Open the printed Network URL on your mobile device, or visit:
+
+```text
+http://<laptop-lan-ip>:4321/
+```
+
+Make sure your computer and mobile device are on the same Wi-Fi network. If Windows Firewall prompts you, allow Node.js/Astro to accept connections on the local network. Do not use `localhost` or `127.0.0.1` on the phone; those addresses point to the phone itself, not your laptop.
+
 ## Prerequisites
 
 ### Shared

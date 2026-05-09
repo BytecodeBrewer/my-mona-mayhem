@@ -23,7 +23,7 @@ export const GET: APIRoute = async ({ params }) => {
 
 	if (!username || !isValidUsername(username)) {
 		return jsonResponse({
-			error: 'Please provide a valid GitHub username',
+			error: 'Use a valid GitHub username: 1-39 letters, numbers, or single hyphens.',
 			status: 400,
 		}, 400);
 	}
