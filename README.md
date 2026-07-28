@@ -66,7 +66,6 @@ Make sure your computer and mobile device are on the same Wi-Fi network. If Wind
 - Astro Node adapter for server-rendered API routes
 - TypeScript
 - ESLint
-- GitHub contribution graph data from `https://github.com/{username}.contribs`
 
 ## Origin
 
